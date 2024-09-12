@@ -1,0 +1,755 @@
+# Western Lake Erie - BART analysis
+# Creator: Alain Isabwe
+# Date: 9/12/2024
+# Data downloads
+urls <- c("https://www.nodc.noaa.gov/archive/arc0204/0254720/1.1/data/0-data/noaa-glerl-erie-habs-field-sampling-results-2020-2021.csv",
+          "https://www.nodc.noaa.gov/archive/arc0152/0209116/1.1/data/0-data/lake_erie_habs_field_sampling_results_2019.csv",
+          "https://www.nodc.noaa.gov/archive/arc0135/0187718/2.2/data/0-data/lake_erie_habs_field_sampling_results_2012_2018_v2.csv")
+
+# A folder created to save downloaded files
+folder_path <- "C:/Users/aisabwe/Desktop/BartFigs/"
+
+for (i in 1:length(urls)) {
+  url_filename <- basename(urls[i])
+  filename <- paste0("file_", i, ".csv")
+  destination <- file.path(folder_path, filename)
+  download.file(urls[i], destination, method = "auto")
+}
+RawData1 <- read.csv("C:/Users/aisabwe/Desktop/BartFigs/file_1.csv", check.names = FALSE)
+RawData2 <- read.csv("C:/Users/aisabwe/Desktop/BartFigs/file_2.csv", check.names = FALSE)
+RawData3 <- read.csv("C:/Users/aisabwe/Desktop/BartFigs/file_3.csv", check.names = FALSE)
+
+# choosing some of the variables from the file 1 and rename them in simple terms
+# example for file_1
+suppressMessages(suppressWarnings(library(dplyr)))
+SelectCol <- c(1,2,5,7,8,13,15,19,20,21,22,23,24,25,26,27,28,32)
+SimpNames <- c("Date","Site","Category","Lat","Lon","Temp", "Beam_att", 
+               "Turb", "pMicr", "dMicr", "Phyco", "Chla", "TP", "TDP", 
+               "SRP", "Ammonia", "Nitr_Nitr","TSS")
+
+for (i in 1:length(SelectCol)) {
+  col_number <- SelectCol[i]
+  new_name <- SimpNames[i]
+  colnames(RawData1)[col_number] <- new_name
+}
+RawData1 <- RawData1 %>%
+  rename(!!!setNames(SimpNames , colnames(RawData1)[SelectCol]))
+RawData1 <- subset(RawData1, select = SelectCol)
+write.csv(RawData1, "l1.csv")
+
+# choosing some of the variables from the file 2
+SelectCol2 <- c(1,2,5,7,8,13,15,19,20,21,22,23,24,25,26,27,28,32)
+SimpNames2 <- c("Date","Site","Category","Lat","Lon","Temp","Beam_att",
+                "Turb", "pMicr", "dMicr", "Phyco", "Chla", "TP", "TDP",
+                "SRP", "Ammonia","Nitr_Nitr","TSS")
+
+for (i in 1:length(SelectCol2)) {
+  col_number2 <- SelectCol2[i]
+  new_name2 <- SimpNames2[i]
+  colnames(RawData2)[col_number2] <- new_name2
+}
+RawData2 <- RawData2 %>%
+  rename(!!!setNames(SimpNames2 , colnames(RawData2)[SelectCol2]))
+RawData2 <- subset(RawData2, select = SelectCol2)
+write.csv(RawData2, "l2.csv")
+
+
+# Load the necessary library
+library(dplyr)
+
+# Specify the indices and new names for selected columns
+SelectCol3 <- c(1, 2, 5, 7, 8,13, 14, 16, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29,35)
+SimpNames3 <- c("Date", "Site","Category", "Lat", "Lon", "TempSamp", "TempCTD", "Beam_att", 
+                "Turb", "pMicr", "dMicr", "Phyco", "Chla", "TP", "TDP", "SRP", "Ammonia", "Nitr_Nitr", "TSS")
+colnames(RawData3)[SelectCol3] <- SimpNames3
+RawData3$TempSamp <- RawData3[, 13]
+RawData3 <- RawData3[, SelectCol3]
+RawData3  <- RawData3  %>%
+  mutate(Temp = coalesce(TempSamp, TempCTD)) %>%
+  select(-TempSamp, -TempCTD)
+write.csv(RawData3, "l3.csv")
+# Combine datasets
+RawData <- rbind(RawData1, RawData2, RawData3)
+# Keep only surface water samples
+RawData<- RawData[RawData$Category == "Surface", ]
+# Keep only samples from known sampling sites
+known_sites <- c("WE2", "WE4","WE6","WE8","WE9","WE12","WE13","WE14","WE15", "WE16")
+RawData<- RawData[RawData$Site %in% known_sites, ]
+cols_to_replace <- c("pMicr","dMicr","Phyco","Beam_att","SRP","Ammonia","Nitr_Nitr")  
+RawData[cols_to_replace] <- lapply(RawData[cols_to_replace], function(x) gsub("<", "0", x))
+suppressPackageStartupMessages(library(lubridate))
+RawData$Date <- as.Date(RawData$Date, format = "%m/%d/%Y")
+RawData$day_of_year <- yday(RawData$Date)
+RawData$Year <- paste0("Year_", year(RawData$Date))
+RawData <- RawData %>% mutate(across(all_of(cols_to_replace), as.numeric))
+write.csv(RawData, "COMB.csv")
+
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(scales))
+suppressPackageStartupMessages(library(dplyr))
+
+#Data cleaning for extreme values
+#Chla
+chla_a= RawData$Chla[!is.na(RawData$Chla)]
+chlaRef<-sort(chla_a, decreasing = TRUE)
+head(chlaRef)
+
+#Turb
+Turb_a= RawData$Turb[!is.na(RawData$Turb)]
+TurbRef<-sort(Turb_a, decreasing = TRUE)
+head(TurbRef)
+
+#Phyco
+Phyco_a= RawData$Phyco[!is.na(RawData$Phyco)]
+PhycoRef<-sort(Phyco_a, decreasing = TRUE)
+head(PhycoRef)
+
+#pMicr
+pMicr_a= RawData$pMicr[!is.na(RawData$pMicr)]
+pMicrRef<-sort(pMicr_a, decreasing = TRUE)
+head(pMicrRef)
+
+
+#Raw data plots
+#Chla
+chla_line_plot <- ggplot(RawData, aes(x = day_of_year, y = Chla)) +
+  geom_line(aes(color = Site, linetype = Year)) +geom_smooth(se = FALSE) +
+  geom_vline(xintercept = 238, linetype = "dashed") +
+  xlab("Day of Year") + ylab("Chl-a") +scale_color_discrete(name = "Site") + 
+  scale_linetype_discrete(name = "Year")+theme_bw() + 
+  scale_color_manual(values = c("#56B4E9", "#0796B2","#0c5E73",
+                                "#043FBB", "#04f2b7","#F0E442",
+                                "#097C73", "#E69F00", "#D55E00", 
+                                "#CC79A7", "#Ee0F00","#009E73"))+
+  scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),
+                labels = trans_format("log10", math_format(10^.x)))
+
+
+#Predictors
+#Temp
+Temp_line_plot <- ggplot(RawData, aes(x = day_of_year, y = Temp)) +
+  geom_line(aes(color = Site, linetype = Year)) +geom_smooth(se = FALSE) +
+  geom_vline(xintercept = 238, linetype = "dashed") +
+  xlab("Day of Year") + ylab("Temperature (C)") +scale_color_discrete(name = "Site") + 
+  scale_linetype_discrete(name = "Year")+theme_bw() + 
+  scale_color_manual(values = c("#56B4E9", "#0796B2","#0c5E73",
+                                "#043FBB", "#04f2b7","#F0E442",
+                                "#097C73", "#E69F00", "#D55E00", 
+                                "#CC79A7", "#Ee0F00","#009E73"))
+
+#TP
+TP_line_plot <- ggplot(RawData, aes(x = day_of_year, y = TP)) +
+  geom_line(aes(color = Site, linetype = Year)) +geom_smooth(se = FALSE) +
+  geom_vline(xintercept = 238, linetype = "dashed") +
+  xlab("Day of Year") + ylab("TP") +scale_color_discrete(name = "Site") + 
+  scale_linetype_discrete(name = "Year")+theme_bw() + 
+  scale_color_manual(values = c("#56B4E9", "#0796B2","#0c5E73",
+                                "#043FBB", "#04f2b7","#F0E442",
+                                "#097C73", "#E69F00", "#D55E00", 
+                                "#CC79A7", "#Ee0F00","#009E73"))+
+  scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),
+                labels = trans_format("log10", math_format(10^.x)))
+
+
+#Beam_att
+Beam_att_line_plot <- ggplot(RawData, aes(x = day_of_year, y = Beam_att)) +
+  geom_line(aes(color = Site, linetype = Year)) +geom_smooth(se = FALSE) +
+  geom_vline(xintercept = 238, linetype = "dashed") +
+  xlab("Day of Year") + ylab("Beam_att") +scale_color_discrete(name = "Site") + 
+  scale_linetype_discrete(name = "Year")+theme_bw() + 
+  scale_color_manual(values = c("#56B4E9", "#0796B2","#0c5E73",
+                                "#043FBB", "#04f2b7","#F0E442",
+                                "#097C73", "#E69F00", "#D55E00", 
+                                "#CC79A7", "#Ee0F00","#009E73"))+
+  scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),
+                labels = trans_format("log10", math_format(10^.x)))
+
+#Turbidity
+Turb_line_plot <- ggplot(RawData, aes(x = day_of_year, y = Turb)) +
+  geom_line(aes(color = Site, linetype = Year)) +geom_smooth(se = FALSE) +
+  geom_vline(xintercept = 238, linetype = "dashed") +
+  xlab("Day of Year") + ylab("Turb") +scale_color_discrete(name = "Site") + 
+  scale_linetype_discrete(name = "Year")+theme_bw() + 
+  scale_color_manual(values = c("#56B4E9", "#0796B2","#0c5E73",
+                                "#043FBB", "#04f2b7","#F0E442",
+                                "#097C73", "#E69F00", "#D55E00", 
+                                "#CC79A7", "#Ee0F00","#009E73"))+
+  scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),
+                labels = trans_format("log10", math_format(10^.x)))
+
+#TSS 
+TSS_line_plot <- ggplot(RawData, aes(x = day_of_year, y = TSS)) +
+  geom_line(aes(color = Site, linetype = Year)) +geom_smooth(se = FALSE) +
+  geom_vline(xintercept = 238, linetype = "dashed") +
+  xlab("Day of Year") + ylab("TSS") +scale_color_discrete(name = "Site") + 
+  scale_linetype_discrete(name = "Year")+theme_bw() + 
+  scale_color_manual(values = c("#56B4E9", "#0796B2","#0c5E73",
+                                "#043FBB", "#04f2b7","#F0E442",
+                                "#097C73", "#E69F00", "#D55E00", 
+                                "#CC79A7", "#Ee0F00","#009E73"))+
+  scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),
+                labels = trans_format("log10", math_format(10^.x)))
+
+TDP_line_plot <- ggplot(RawData, aes(x = day_of_year, y = TDP)) +
+  geom_line(aes(color = Site, linetype = Year)) +geom_smooth(se = FALSE) +
+  geom_vline(xintercept = 238, linetype = "dashed") +
+  xlab("Day of Year") + ylab("TDP") +scale_color_discrete(name = "Site") + 
+  scale_linetype_discrete(name = "Year")+theme_bw() + 
+  scale_color_manual(values = c("#56B4E9", "#0796B2","#0c5E73",
+                                "#043FBB", "#04f2b7","#F0E442",
+                                "#097C73", "#E69F00", "#D55E00", 
+                                "#CC79A7", "#Ee0F00","#009E73"))+
+  scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),
+                labels = trans_format("log10", math_format(10^.x)))
+
+SRP_line_plot <- ggplot(RawData, aes(x = day_of_year, y = SRP)) +
+  geom_line(aes(color = Site, linetype = Year)) +geom_smooth(se = FALSE) +
+  geom_vline(xintercept = 238, linetype = "dashed") +
+  xlab("Day of Year") + ylab("SRP") +scale_color_discrete(name = "Site") + 
+  scale_linetype_discrete(name = "Year")+theme_bw() + 
+  scale_color_manual(values = c("#56B4E9", "#0796B2","#0c5E73",
+                                "#043FBB", "#04f2b7","#F0E442",
+                                "#097C73", "#E69F00", "#D55E00", 
+                                "#CC79A7", "#Ee0F00","#009E73"))+
+  scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),
+                labels = trans_format("log10", math_format(10^.x)))
+
+
+Ammonia_line_plot <- ggplot(RawData, aes(x = day_of_year, y = Ammonia)) +
+  geom_line(aes(color = Site, linetype = Year)) +geom_smooth(se = FALSE) +
+  geom_vline(xintercept = 238, linetype = "dashed") +
+  xlab("Day of Year") + ylab("Ammonia") +scale_color_discrete(name = "Site") + 
+  scale_linetype_discrete(name = "Year")+theme_bw() + 
+  scale_color_manual(values = c("#56B4E9", "#0796B2","#0c5E73",
+                                "#043FBB", "#04f2b7","#F0E442",
+                                "#097C73", "#E69F00", "#D55E00", 
+                                "#CC79A7", "#Ee0F00","#009E73"))+
+  scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),
+                labels = trans_format("log10", math_format(10^.x)))
+
+Nitr_Nitr_line_plot <- ggplot(RawData, aes(x = day_of_year, y = Nitr_Nitr)) +
+  geom_line(aes(color = Site, linetype = Year)) +geom_smooth(se = FALSE) +
+  geom_vline(xintercept = 238, linetype = "dashed") +
+  xlab("Day of Year") + ylab("Nitr_Nitr") +scale_color_discrete(name = "Site") + 
+  scale_linetype_discrete(name = "Year")+theme_bw() + 
+  scale_color_manual(values = c("#56B4E9", "#0796B2","#0c5E73",
+                                "#043FBB", "#04f2b7","#F0E442",
+                                "#097C73", "#E69F00", "#D55E00", 
+                                "#CC79A7", "#Ee0F00","#009E73"))+
+  scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),
+                labels = trans_format("log10", math_format(10^.x)))
+
+
+#Combined plot
+library(ggpubr)
+PredPlots<-ggarrange(Beam_att_line_plot, Turb_line_plot,TSS_line_plot,
+                    TP_line_plot, TDP_line_plot, SRP_line_plot, 
+                    Ammonia_line_plot,Nitr_Nitr_line_plot,Temp_line_plot, 
+                    ncol = 3, nrow = 3,common.legend = TRUE,
+                    legend = "right")
+
+PredPlots
+#Cleaning
+CleanData <- subset(RawData, 
+                    Chla < 1000 & 
+                      Phyco < 700 & 
+                      pMicr < 100)
+#**PCA of all predictors (log transformed)**
+library(factoextra)
+selected_vars <- c("Site", "Temp", "Beam_att", "Turb", 
+                   "TSS", "SRP", "TDP", "TP", "Ammonia", "Nitr_Nitr")
+library(ggfortify)
+pca_data <- CleanData[, selected_vars]
+pca_data <- na.omit(pca_data)
+nrow(pca_data)
+
+res.pca <- prcomp(log1p(pca_data[, -1]), scale = TRUE)
+p <- fviz_pca_biplot(res.pca, 
+                     label = "var",
+                     habillage = pca_data$Site,
+                     addEllipses = FALSE,
+                     geom.ind = "point", 
+                     geom.ind.shape = 21)
+p + scale_color_manual(values =  c("#56B4E9", "#0796B2","#0c5E73",
+                                   "#043FBB", "#04f2b7","#F0E442",
+                                   "#097C73", "#E69F00", "#D55E00", 
+                                   "#CC79A7", "#Ee0F00","#009E73"))+theme_bw()+
+  scale_shape_manual(values = c(21,21,21,21,21,21,21,21,21,21,21))
+
+# Defining the growth and decay based on day 236 (Maguire et al. 2024)
+
+start_day=189
+peak_day=236
+end_day=272
+  
+GrowthData <- CleanData %>% 
+  filter(day_of_year >= start_day&day_of_year <= peak_day)
+
+DecayData <- CleanData %>%
+  filter(day_of_year  <= end_day&day_of_year >= peak_day)
+
+#Join both datasets
+GrowthData$source <- "Growth"
+DecayData$source <- "Decay"
+
+GrowthDecayData <- rbind(GrowthData,DecayData)
+
+DataForScatter <- GrowthDecayData %>%
+  select(source, Chla, Temp, Beam_att, TSS,Turb, TP, 
+         TDP, SRP, Ammonia, Nitr_Nitr)
+
+#Changes in responses and predictors
+
+library(GGally)
+library(ggpubr)
+#Density plot of chl-a data
+
+a<-gghistogram(GrowthDecayData, x = "Chla",
+             add = "mean", rug = TRUE,
+             color = "source", fill = "source",
+             palette = c("#D55E00","#009E73"))
+
+a+theme_minimal()
+
+nrow(GrowthData)
+nrow(DecayData)
+
+
+#SCATTER PLOT MATRIX
+
+palette = c("Growth" = "#D55E00", "Decay"="#009E73") 
+
+ggpairs(DataForScatter, columns = 2:11, aes(color = source, alpha = 0.5),
+        upper = list(continuous = wrap("cor", size = 2.5), fill = palette),
+        lower = list(continuous = "smooth"),
+        title_size =2)+ scale_color_manual(values = palette)+theme_minimal()+  
+  scale_fill_manual(values = palette) +theme(panel.background = element_rect(fill = 'white')) +
+  theme(axis.text.x = element_text(angle = 90))
+##############################################
+
+# CHL-a during the growth period
+DataBartChlaGr<- select(GrowthData, Chla, Temp,
+                        Beam_att,TP,TDP,
+                        SRP,Ammonia,Nitr_Nitr)
+DataBartChlaGr<-na.omit(DataBartChlaGr)
+y <- DataBartChlaGr$Chla
+PredGr<-  select(DataBartChlaGr, Temp,
+                 Beam_att,TP,TDP,
+                 SRP,Ammonia,Nitr_Nitr)
+#BART
+options(java.parameters = "-Xmx14g")
+library(bartMachine)
+library(bartMan)
+set.seed(1234)
+bmChlaGr<- bartMachine(X = PredGr, y = y,
+                       k=2, nu=3, q=0.9, num_trees=20,
+                       num_iterations_after_burn_in=100000,
+                       num_burn_in = 3000,
+                       seed = 1234, verbose = TRUE,
+                       use_missing_data = FALSE,
+                       serialize = TRUE)
+summary(bmChlaGr)
+modelChlaGr<-bartDiag(model = bmChlaGr, response = DataBartChlaGr$Chla, 
+                      burnIn = 1000, data = PredGr)
+modelChlaGr
+
+
+# extract results
+#dbTGr <- extractTreeData(model = bmChlaGr, data = PredGr)
+#save(dbTGr, file = "dbTGr.RData")
+
+###plots
+#Variable importance
+my_palette <- c("#3E619B")
+plotVimpGr <- modelChlaGr[[6]]+scale_y_continuous(name="Variable importance", limits=c(0.07, 0.22)) + 
+  scale_color_manual(values = my_palette)+
+  labs(title = NULL) +
+  theme(axis.title.x=element_blank(), axis.title.y=element_blank())
+
+
+#Fit
+n1 = bmChlaGr$n
+rsq1 = bmChlaGr$PseudoRsq
+rmse1 = bmChlaGr$rmse_train
+
+plotFitGr <- modelChlaGr[[5]]+scale_x_continuous(name="Observed values", limits=c(0, 6.5)) + 
+  scale_y_continuous(name="Fitted values", limits=c(0, 6.5))+
+  scale_color_manual(values = my_palette)+
+  annotate("text", x = 0, y = 6.2, 
+           label = paste0("Growth", "\nR", "\U00B2", " = ", round(rsq1, 3), "\nRMSE = ", round(rmse1, 2),
+                          "\nn = ", n1),  vjust = 0.9, hjust = 0)+labs(title = NULL)+
+  labs(title = NULL) +
+  theme(axis.title.x=element_blank())
+#PDP growth
+
+vars <- c("TP", "Ammonia", "Temp", "Nitr_Nitr",  
+          "Beam_att", "SRP", "TDP")
+
+# Empty list to store data frames
+pd_data <- vector("list", length(vars)) 
+
+for(i in seq_along(vars)) {
+  
+  # Generate pd_plot
+  pd_output <- pd_plot(bmChlaGr, vars[i]) 
+  
+  # Extract components
+  avg_pred <- pd_output$bart_avg_predictions_by_quantile
+  quantiles <- pd_output$x_j_quants
+  
+  # Create data frame
+  pd_data[[i]] <- data.frame(
+    Variable = vars[i],
+    Quantile = quantiles,
+    Avg_Prediction = avg_pred
+  )
+  
+}
+pd_gr<- do.call(rbind, pd_data)
+write.csv(pd_gr, "gr_pd.csv")
+
+##########################################################################################
+
+options(java.parameters = "-Xmx14g")
+library(bartMachine)
+
+# CHL-a during the decay period 
+DataBartChlaDc<- select(DecayData, Chla, Temp,
+                        Beam_att,TP,TDP,
+                        SRP,Ammonia,Nitr_Nitr)
+DataBartChlaDc<-na.omit(DataBartChlaDc)
+y <- log1p(DataBartChlaDc$Chla)
+PredDc<-  select(DataBartChlaDc, Temp,
+                 Beam_att,TP,TDP,
+                 SRP,Ammonia,Nitr_Nitr)
+#BART
+options(java.parameters = "-Xmx14g")
+library(bartMachine)
+library(bartMan)
+bmChlaDc<- bartMachine(X = PredDc, y = y,
+                       k=2, nu=3, q=0.9, num_trees=20,
+                       num_iterations_after_burn_in=100000,
+                       num_burn_in = 3000,
+                       seed = 1234, verbose = TRUE,
+                       use_missing_data = FALSE)
+summary(bmChlaDc)
+######model#####
+modelChlaDc<-bartDiag(model = bmChlaDc, response = DataBartChlaDc$Chla, 
+                      burnIn = 300, data = PredDc)
+# extract results
+#dbTDc <- extractTreeData(model = bmChlaDc, data = PredDc)
+#save(dbTDc, file = "dbTDc.RData")
+
+plotVimpDc <- modelChlaDc[[6]]+scale_y_continuous(name="Variable importance", limits=c(0.07, 0.22)) + 
+  scale_color_manual(values = my_palette)+
+  theme(axis.title.y=element_blank())
+
+
+#fit
+n2 = bmChlaDc$n
+rsq2 = bmChlaDc$PseudoRsq
+rmse2 = bmChlaDc$rmse_train
+plotFitDc <- modelChlaDc[[5]]+scale_x_continuous(name="Observed values", limits=c(0, 6.5)) + 
+  scale_y_continuous(name="Fitted values", limits=c(0, 6.5))+
+  scale_color_manual(values = my_palette)+
+  annotate("text", x = 0, y = 6.2, 
+           label = paste0("Decay", "\nR", "\U00B2", " = ", round(rsq2, 3), "\nRMSE = ", round(rmse2, 2),
+                          "\nn = ", n2),  vjust = 0.9, hjust = 0)+labs(title = NULL)
+
+#PDP decay
+vars <- c("TP", "Ammonia", "Temp", "Nitr_Nitr",  
+          "Beam_att", "SRP", "TDP")
+
+# Empty list to store data frames
+pd_data <- vector("list", length(vars)) 
+
+for(i in seq_along(vars)) {
+  
+  # Generate pd_plot
+  pd_output <- pd_plot(bmChlaDc, vars[i]) 
+  
+  # Extract components
+  avg_pred <- pd_output$bart_avg_predictions_by_quantile
+  quantiles <- pd_output$x_j_quants
+  
+  # Create data frame
+  pd_data[[i]] <- data.frame(
+    Variable = vars[i],
+    Quantile = quantiles,
+    Avg_Prediction = avg_pred
+  )
+  
+}
+pd_dc<- do.call(rbind, pd_data)
+write.csv(pd_dc, "dc_pd.csv")
+##########################################################
+#All
+# CHL-a for all 
+DataBartChlaAll<- select(GrowthDecayData, Chla, Temp,
+                         Beam_att,TP,TDP,
+                         SRP,Ammonia,Nitr_Nitr)
+DataBartChlaAll<-na.omit(DataBartChlaAll)
+y <- log1p(DataBartChlaAll$Chla)
+PredAll<-  select(DataBartChlaAll, Temp,
+                  Beam_att,TP,TDP,
+                  SRP,Ammonia,Nitr_Nitr)
+#BART
+options(java.parameters = "-Xmx14g")
+library(bartMachine)
+library(bartMan)
+bmChlaAll<- bartMachine(X = PredAll, y = y,
+                        k=2, nu=3, q=0.9, num_trees=20,
+                        num_iterations_after_burn_in=100000,
+                        num_burn_in = 3000,
+                        seed = 1234, verbose = TRUE,
+                        use_missing_data = FALSE,
+                        serialize = TRUE)
+summary(bmChlaAll)
+modelChlaAll<-bartDiag(model = bmChlaAll, response = DataBartChlaAll$Chla, 
+                       burnIn = 300, data = PredAll)
+
+# extract results
+#dbTAll <- extractTreeData(model = bmChlaAll, data = PredAll)
+#save(dbTAll, file = "dbTAll.RData")
+
+
+###plots
+my_palette <- c("#3E619B","#3E619B")
+plotVimpAll<- modelChlaAll[[6]]+scale_y_continuous(name="Variable importance", limits=c(0.07, 0.22)) + 
+  scale_color_manual(values = my_palette)+
+  labs(title = NULL) +
+  theme(axis.title.x=element_blank(), axis.title.y=element_blank())
+
+
+
+#Fit
+n3= bmChlaAll$n
+rsq3 = bmChlaAll$PseudoRsq
+rmse3 = bmChlaAll$rmse_train
+
+plotFitAll <- modelChlaAll[[5]]+scale_x_continuous(name="Observed values", limits=c(0, 6.5)) + 
+  scale_y_continuous(name="Fitted values", limits=c(0, 6.5))+
+  scale_color_manual(values = my_palette)+
+  annotate("text", x = 0, y = 6.2, 
+           label = paste0("All", "\nR", "\U00B2", " = ", round(rsq3, 3), "\nRMSE = ", round(rmse3, 2),
+                          "\nn = ", n3),  vjust = 0.9, hjust = 0)+labs(title = NULL)+
+  labs(title = NULL) +
+  theme(axis.title.x=element_blank())
+
+#PDP All
+vars <- c("TP", "Ammonia", "Temp", "Nitr_Nitr",  
+          "Beam_att", "SRP", "TDP")
+
+# Empty list to store data frames
+pd_data <- vector("list", length(vars)) 
+
+for(i in seq_along(vars)) {
+  
+  # Generate pd_plot
+  pd_output <- pd_plot(bmChlaAll, vars[i]) 
+  
+  # Extract components
+  avg_pred <- pd_output$bart_avg_predictions_by_quantile
+  quantiles <- pd_output$x_j_quants
+  
+  # Create data frame
+  pd_data[[i]] <- data.frame(
+    Variable = vars[i],
+    Quantile = quantiles,
+    Avg_Prediction = avg_pred
+  )
+  
+}
+pd_all<- do.call(rbind, pd_data)
+write.csv(pd_all, "all_pd.csv")
+#### RESULTS
+library(ggpubr)
+
+FitPlot<-ggarrange(plotFitAll,plotVimpAll, 
+          plotFitGr, plotVimpGr,
+          plotFitDc,plotVimpDc, 
+          ncol = 2, nrow = 3)
+
+
+##pdp
+data_pdp <- read.csv("C:/Users/aisabwe/Desktop/20240301/all_pdp.csv", check.names = FALSE)
+head(data_pdp)
+pdp_all_plt<-ggplot(data=data_pdp, aes(x=Quantile, y=Avg_Prediction, group=Season)) +
+  geom_line(aes(color=Season))+
+  geom_point(aes(color=Season))+facet_grid(.~Variable, scales = "free_x")
+
+
+gr_pdp<-read.csv("gr_pd.csv")
+dc_pdp<-read.csv("dc_pd.csv")
+all_pdp<-read.csv("all_pd.csv")
+
+library(ggplot2)
+#Join both datasets
+gr_pdp$source <- "Growth"
+dc_pdp$source <- "Decay"
+all_pdp$source <- "All"
+pdp_data<-rbind(gr_pdp, dc_pdp, all_pdp)
+head(pdp_data)
+
+
+TP_df <- subset(pdp_data, Variable == "TP")
+TpPlot<-ggplot(TP_df, aes(x = Quantile, y = Avg_Prediction, color = source))+ 
+  geom_line() +
+  geom_point() +
+  facet_grid(~Variable)+theme_bw()+
+  ylim(1.5, 4)+scale_color_manual(values= c("Growth" = "#D55E00", "Decay"="#009E73",  "All"="#E69F00"))+
+  xlab("ug/L")+ylab("Partial dependency")
+
+
+Ammonia_df <- subset(pdp_data, Variable == "Ammonia")
+AmmoniaPlot<-ggplot(Ammonia_df, aes(x = Quantile, y = Avg_Prediction, color = source))+ 
+  geom_line() +
+  geom_point() +
+  facet_grid(~Variable)+theme_bw()+
+  ylim(1.5, 4)+scale_color_manual(values= c("Growth" = "#D55E00", "Decay"="#009E73", "All"="#E69F00"))+
+  xlab("ug/L")+ylab("")
+
+
+Temp_df <- subset(pdp_data, Variable == "Temp")
+TempPlot<-ggplot(Temp_df, aes(x = Quantile, y = Avg_Prediction, color = source))+ 
+  geom_line() +
+  geom_point() +
+  facet_grid(~Variable)+theme_bw()+
+  ylim(1.5, 4)+scale_color_manual(values= c("Growth" = "#D55E00", "Decay"="#009E73", "All"="#E69F00"))+
+  xlab("C")+ylab("")
+
+Beam_att_df <- subset(pdp_data, Variable == "Beam_att")
+Beam_attPlot<-ggplot(Beam_att_df, aes(x = Quantile, y = Avg_Prediction, color = source))+ 
+  geom_line() +
+  geom_point() +
+  facet_grid(~Variable)+theme_bw()+
+  ylim(1.5, 4)+scale_color_manual(values= c("Growth" = "#D55E00", "Decay"="#009E73",  "All"="#E69F00"))+
+  xlab("units")+ylab("")
+
+TDP_df <- subset(pdp_data, Variable == "TDP")
+TDPPlot<-ggplot(TDP_df, aes(x = Quantile, y = Avg_Prediction, color = source))+ 
+  geom_line() +
+  geom_point() +
+  facet_grid(~Variable)+theme_bw()+
+  ylim(1.5, 4)+scale_color_manual(values= c("Growth" = "#D55E00", "Decay"="#009E73", "All"="#E69F00"))+
+  xlab("ug/L")+ylab("Partial dependency")
+
+
+
+SRP_df <- subset(pdp_data, Variable == "SRP")
+SRPPlot<-ggplot(SRP_df, aes(x = Quantile, y = Avg_Prediction, color = source))+ 
+  geom_line() +
+  geom_point() +
+  facet_grid(~Variable)+theme_bw()+
+  ylim(1.5, 4)+scale_color_manual(values= c("Growth" = "#D55E00", "Decay"="#009E73", "All"="#E69F00"))+
+  xlab("ug/L")+ylab("")
+
+
+Nitr_Nitr_df <- subset(pdp_data, Variable == "Nitr_Nitr")
+Nitr_NitrPlot<-ggplot(Nitr_Nitr_df, aes(x = Quantile, y = Avg_Prediction, color = source))+ 
+  geom_line() +
+  geom_point() +
+  facet_grid(~Variable)+theme_bw()+
+  ylim(1.5, 4)+scale_color_manual(values= c("Growth" = "#D55E00", "Decay"="#009E73",  "All"="#E69F00"))+
+  xlab("ug/L")+ylab("")
+
+
+PDPPlots<-ggarrange(TpPlot, AmmoniaPlot, TempPlot,
+                    Beam_attPlot, TDPPlot, SRPPlot,Nitr_NitrPlot,
+                    ncol = 4, nrow = 2)
+
+PDPPlots
+
+pdp_all_plt+scale_color_manual(values=c("#E69F00","#D55E00", "#009E73"))
+
+palette = c("Growth" = "#D55E00", "Decay"="#009E73", "All"="#E69F00") 
+
+
+####################
+#Variable interactions
+library(vivid)
+library(bartMan)
+load("dbTAll.RData")
+load("dbTGr.RData")
+load("dbTDc.RData")
+################
+#retrieving data
+stdMatAll <- viviBartMatrix(dbTAll,type = 'standard', metric = 'propMean')
+stdMatGr <- viviBartMatrix(dbTGr,type = 'standard', metric = 'propMean')
+stdMatDr <- viviBartMatrix(dbTDc,type = 'standard', metric = 'propMean')
+#plots
+vIntAll<-viviNetwork(mat =stdMatAll)
+vIntGr<-viviNetwork(mat =stdMatGr)
+vIntDc<-viviNetwork(mat =stdMatDc)
+#combined
+vIntPlots<-ggarrange(vIntAll, vIntGr, vIntDc,
+                    ncol = 3, nrow = 1)
+
+#Chla/tp relationships
+# Fit a linear regression model with brms for data before peak
+library(brms)
+GrowthData 
+####LOG TRANS
+fit_bef_TP <- brm(Chla ~ TP, data = GrowthData)
+library(ggplot2)
+
+samples <- posterior_samples(fit_bef_TP)
+data_bef_TP <- data.frame(
+  intercept = samples$b_Intercept,
+  slope = samples$b_TP)
+# Fit a linear regression model with brms for data AFTER peak
+fit_aft_TP <- brm(Chla ~ TP, data = DecayData)
+samples <- posterior_samples(fit_aft_TP)
+data_aft_TP <- data.frame(
+  intercept = samples$b_Intercept,
+  slope = samples$b_TP)
+
+#All
+fit_all_TP <- brm(Chla ~ TP, data = GrowthDecayData)
+samples <- posterior_samples(fit_all_TP)
+data_all_TP <- data.frame(
+  intercept = samples$b_Intercept,
+  slope = samples$b_TP)
+library(ggpubr)
+
+plot_tp_all_post<-ggplot(data_all_TP, aes(x = slope, y = intercept)) +
+  geom_point(alpha = 0.2) +
+  stat_density_2d(aes(fill = ..level..), geom = "polygon") +
+  scale_fill_gradient(low = "yellow", high = "red", guide = FALSE) +
+  labs(x = "Slope (TP)", y = "Intercept")+
+  ggtitle("All")+
+  theme_bw()+scale_y_continuous(limits=c(0, 20))+scale_x_continuous(limits=c(0.25, 0.60))
+
+plot_tp_bef_post<-ggplot(data_bef_TP, aes(x = slope, y = intercept)) +
+  geom_point(alpha = 0.2) +
+  stat_density_2d(aes(fill = ..level..), geom = "polygon") +
+  scale_fill_gradient(low = "yellow", high = "red", guide = FALSE) +
+  labs(x = "Slope (TP)", y = "Intercept")+
+  ggtitle("Growth")+
+  theme_bw()+scale_y_continuous(limits=c(0, 20))+scale_x_continuous(limits=c(0.25, 0.60))
+
+plot_tp_aft_post<-ggplot(data_aft_TP, aes(x = slope, y = intercept)) +
+  geom_point(alpha = 0.2) +
+  stat_density_2d(aes(fill = ..level..), geom = "polygon") +
+  scale_fill_gradient(low = "yellow", high = "red", guide = FALSE) +
+  labs(x = "Slope (TP)", y = "Intercept")+
+  ggtitle("Decay")+theme_bw()+scale_y_continuous(limits=c(0, 20))+scale_x_continuous(limits=c(0.25, 0.60))
+
+# Arrange the plots side by side using ggarrange()
+ggarrange(plot_tp_all_post, plot_tp_bef_post, plot_tp_aft_post,
+          nrow = 3, ncol = 1, common.legend = TRUE)
+
+#Retrive mcmc plots
+plotMCMCAll <- modelChlaAll[[2]]+
+  scale_y_continuous(limits=c(0.30, 0.60)) + 
+xlab("")+ggtitle("All")
+plotMCMCGr <- modelChlaGr[[2]]+
+  scale_y_continuous(limits=c(0.30, 0.60)) + 
+  xlab("")+ggtitle("Growth")
+plotMCMCDc <- modelChlaDc[[2]]+
+  scale_y_continuous(limits=c(0.30, 0.60)) + 
+  ggtitle("Decay")
+
+# Arrange MCMC plots
+ggarrange(plotMCMCAll, plotMCMCGr, plotMCMCDc,
+          nrow = 3, ncol = 1, common.legend = TRUE)
